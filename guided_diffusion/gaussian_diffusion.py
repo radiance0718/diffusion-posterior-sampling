@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from tqdm.auto import tqdm
 
-from util.img_utils import clear_color
+from util.img_utils import clear_color, clear_gray
 from .posterior_mean_variance import get_mean_processor, get_var_processor
 
 
@@ -202,7 +202,7 @@ class GaussianDiffusion:
             if record:
                 if idx % 10 == 0:
                     file_path = os.path.join(save_root, f"progress/x_{str(idx).zfill(4)}.png")
-                    plt.imsave(file_path, clear_color(img))
+                    plt.imsave(file_path, clear_gray(img), cmap = 'gray')
 
         return img       
         
@@ -211,7 +211,7 @@ class GaussianDiffusion:
 
     def p_mean_variance(self, model, x, t):
         model_output = model(x, self._scale_timesteps(t))
-        
+         
         # In the case of "learned" variance, model will give twice channels.
         if model_output.shape[1] == 2 * x.shape[1]:
             model_output, model_var_values = torch.split(model_output, x.shape[1], dim=1)

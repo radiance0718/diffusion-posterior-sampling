@@ -1,0 +1,20 @@
+conditioning:
+  method: ps+sp
+  params:
+    scale: 0.7
+    miu: 0.05
+    sparsity: 6
+    num_proj: 30
+    circle: False
+    
+
+data:
+  name: origin_ddpm
+  root: ./data/ASOCT/
+
+measurement:
+  operator:
+    name: noise
+  
+  noise: 
+    name: clean

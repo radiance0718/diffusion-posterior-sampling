@@ -39,7 +39,9 @@ class ConditioningMethod(ABC):
             norm_grad = torch.autograd.grad(outputs=norm, inputs=x_prev)[0]
 
         else:
-            raise NotImplementedError
+            difference = measurement - x_0_hat
+            norm = torch.linalg.norm(difference)
+            norm_grad = torch.autograd.grad(outputs=norm, inputs=x_prev)[0]
              
         return norm_grad, norm
    
@@ -102,5 +104,38 @@ class PosteriorSamplingPlus(ConditioningMethod):
             norm += torch.linalg.norm(difference) / self.num_sampling
         
         norm_grad = torch.autograd.grad(outputs=norm, inputs=x_prev)[0]
+        x_t -= norm_grad * self.scale
+        return x_t, norm
+
+@register_conditioning_method(name='ps+sp')
+class PosteriorSampling(ConditioningMethod):
+    def __init__(self, operator, noiser, **kwargs):
+        super().__init__(operator, noiser)
+        self.scale = kwargs.get('scale', 1.0)
+        self.miu = kwargs.get('miu', 0.01)
+
+    def MiniSJZ(self, g,u,mu):
+        [one, w, Nx,Ny]=g.shape
+        z=torch.zeros((one, w, Nx,Ny), device = g.device)
+        z_old=torch.ones((one, w, Nx,Ny), device = g.device)
+        # while sum(sum(torch.abs(z - z_old))) > 0.01:
+        while torch.max(abs(z - z_old)) > 0.01:
+            z_old=z
+            # % fz=z+exp(g-z)+mu/2/L*(z-u-d).^2
+            #mu=mu/L
+            fdz=1-torch.exp(g-z)+mu*(z-u)
+            fddz=torch.exp(g-z)+mu
+            eps=2e-10
+            z=z-fdz/(fddz+eps)
+        return z
+
+    def conditioning(self, x_prev, x_t, x_0_hat, measurement, **kwargs):
+        mu = self.miu
+        # if(t < 250):
+        #     x_0_hat = self.MiniSJZ(x_t, x_prev, mu)
+        # else:
+        #     x_0_hat = self.MiniSJZ(x_t, measurement, mu)
+        x_0_hat = self.MiniSJZ(x_t, measurement, mu)
+        norm_grad, norm = self.grad_and_value(x_prev=x_prev, x_0_hat=x_0_hat, measurement=measurement, **kwargs)
         x_t -= norm_grad * self.scale
         return x_t, norm
