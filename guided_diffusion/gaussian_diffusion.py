@@ -404,6 +404,44 @@ class DDIM(SpacedDiffusion):
         coef1 = extract_and_expand(self.sqrt_recip_alphas_cumprod, t, x_t)
         coef2 = extract_and_expand(self.sqrt_recipm1_alphas_cumprod, t, x_t)
         return (coef1 * x_t - pred_xstart) / coef2
+    
+    def p_sample_loop(self,
+                      model,
+                        x_start,
+                        measurement,
+                        measurement_cond_fn,
+                        record,
+                        save_root,
+                        eta=0.0):
+        """
+        The function used for sampling from noise.
+        DDIM version.
+        """
+        img = x_start
+        device = x_start.device
+
+        pbar = tqdm(list(range(self.num_timesteps))[::-1])
+        for idx in pbar:
+            time = torch.tensor([idx] * img.shape[0], device=device)
+            
+            img = img.requires_grad_()
+            out = self.p_sample(model=model, x=img, t=time, eta=eta)
+            
+            # Give condition.
+            noisy_measurement = self.q_sample(measurement, t=time)
+
+            img, distance = measurement_cond_fn(x_t=out['sample'],
+                                        measurement=measurement,
+                                        noisy_measurement=noisy_measurement,
+                                        x_prev=img,
+                                        x_0_hat=out['pred_xstart'])
+            img = img.detach_()
+            
+            pbar.set_postfix({'distance': distance.item()}, refresh=False)
+            if record:
+                if idx % 10 == 0:
+                    file_path = os.path.join(save_root, f"progress/x_{str(idx).zfill(4)}.png")
+                    plt.imsave(file_path, clear_gray(img), cmap = 'gray')
 
 
 # =================
